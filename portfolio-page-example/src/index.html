@@ -27,7 +27,42 @@
     <!-- Your Elm application  -->
     <script src="Main.js"></script>
     <script>
-      var app = Elm.Main.init({})
+      (() => {
+        let app = Elm.Main.init({})
+        let scrollDownBtn = document.getElementById("scroll-down-button")
+        let textAreas = document.getElementsByTagName('textarea');
+
+        // Scroll to ID
+        let elmScrollTopId = function (id) {
+          // console.log("id is: ", id, " and scrolltop of it is: ", document.getElementById(id).scrollTop)
+          window.scroll({
+            top: document.getElementById(id).offsetTop,
+            left: 0,
+            behavior: 'smooth'
+          })
+        }
+        let sendFixedNav = function () {
+          app.ports.scrollNavData.send(window.scrollY > scrollDownBtn.offsetTop)
+        }
+
+        sendFixedNav() // initial sending to determine if it needs fixed
+        document.addEventListener("scroll", sendFixedNav)
+        document.addEventListener("resize", sendFixedNav)
+        for(let i = 0; i < textAreas.length; i++) {
+          textAreas[i].setAttribute('style', 'height: auto;overflow-y:hidden;');
+          textAreas[i].addEventListener("input", function () {
+            // Listens to input and changes the height
+            this.style.height = 'auto';
+            if (this.scrollHeight > 0) {
+              this.style.height = (this.scrollHeight) + 'px';
+            }
+            // Listens to input to output character limit TODO: implement some char limit
+            var maxLength = this.getAttribute("maxlength");
+            var currentLength = this.value.length;
+          }, false);
+        }
+        app.ports.scrollToTopId.subscribe(elmScrollTopId)
+      })()
     </script>
   </body>
 </html>

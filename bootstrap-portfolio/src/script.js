@@ -1,9 +1,8 @@
-var lnStickyNavigation;
 
 $(document).ready(function () {
     applyHeader(); // done
-    applyNavigation(); 
-    applyMailTo();
+    applyNavigation(); // done
+    applyMailTo(); // ignored
     applyResize();
     checkHash();
     applyFormChecking();
@@ -17,10 +16,10 @@ function applyHeader() {
 
 /* NAVIGATION FUNCTIONS */
 function applyNavigation() {
-    applyClickEvent();
+    applyClickEvent(); // done
     applyNavigationFixForPhone();
-    applyScrollSpy();
-    applyStickyNavigation();
+    applyScrollSpy(); // NOTE: ABANDONED
+    applyStickyNavigation(); // TODO: Apply this to resize as well
 }
 
 function applyClickEvent() {
@@ -52,8 +51,6 @@ function applyScrollSpy() {
 function applyStickyNavigation() {
     // i.e. the chevron button is 80px height with 20px offset,
     // attached fixed property adds the extra 60 height to nav for the allowance
-    lnStickyNavigation = $('.scroll-down').offset().top + 20;
-
     $(window).on('scroll', function () {
         stickyNavigation();
     });
@@ -62,7 +59,7 @@ function applyStickyNavigation() {
 }
 
 function stickyNavigation() {
-    if ($(window).scrollTop() > lnStickyNavigation) {
+    if ($(window).scrollTop() > $('.scroll-down').offset().top + 20) {
         $('body').addClass('fixed');
     } else {
         $('body').removeClass('fixed');
@@ -84,7 +81,8 @@ function applyMailTo() {
 function applyResize() {
     applyResizeAllTextAreasByInput();
     $(window).on('resize', function () {
-        lnStickyNavigation = $('.scroll-down').offset().top + 20;
+        stickyNavigation();
+        // lnStickyNavigation = ;
         // resizes window when scrolling down such that the jumbotron's panel should
         // scale with the size of the window
         // $('.jumbotron').css({ height: ($(window).height()) + 'px' });
@@ -98,6 +96,7 @@ function applyResizeAllTextAreasByInput() {
     var textAreas = document.getElementsByTagName('textarea');
     for(var i = 0; i < textAreas.length; i++){
         textAreas[i].setAttribute('style', 'height: auto;overflow-y:hidden;');
+        
         textAreas[i].addEventListener("input", function () {
             // Listens to input and changes the height
             this.style.height = 'auto';
@@ -112,6 +111,7 @@ function applyResizeAllTextAreasByInput() {
 }
 
 function resizeAllTextAreas() {
+    console.log("this is resized: ", textAreas);
     var textAreas = document.getElementsByTagName('textarea');
 
     for (var i = 0; i < textAreas.length; i++) {

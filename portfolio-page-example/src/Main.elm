@@ -1,4 +1,4 @@
-module Main exposing (main)
+port module Main exposing (main)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -24,13 +24,13 @@ type alias Model =
   , pageSection : PageSection
   , navState : Navbar.State
   , modalVisibility : Modal.Visibility
+  , isNavFixed : NavFix
   }
 
--- TODO:
---  General Layout
---  Navigation bar
---  Scrollspy
---  Links
+type NavFix = FixNav | FreeNav
+
+port scrollNavData : (Bool -> msg) -> Sub msg
+port scrollToTopId : String -> Cmd msg
 
 type PageSection
   = IntroJumbo
@@ -40,12 +40,26 @@ type PageSection
   | Abilities
   | Contact
 
+getSectionId : Maybe PageSection -> String
+getSectionId pagesection =
+  case pagesection of
+    Just section ->
+      case section of
+        IntroJumbo -> "top-jumbo"
+        Profile -> "profile"
+        Experience -> "experience"
+        Projects -> "projects"
+        Abilities -> "abilities"
+        Contact -> "contact"
+    Nothing -> ""
+
 type Msg
   = UrlChange Url
   | ClickedLink UrlRequest
   | NavMsg Navbar.State
   | CloseContactModal
   | ShowContactModal
+  | OnScroll Bool
 
 main : Program Flags Model Msg
 main =
@@ -62,17 +76,20 @@ init : Flags -> Url -> Navigation.Key -> (Model, Cmd Msg)
 init flags url key =
   let
     (navState, navCmd) = Navbar.initialState NavMsg
+    
     (model, urlCmd) = urlUpdate url
       { navKey = key
       , navState = navState
       , pageSection = IntroJumbo
       , modalVisibility = Modal.hidden
+      , isNavFixed = FixNav
       }
   in
     (model, Cmd.batch[urlCmd, navCmd])
 
 subscriptions : Model -> Sub Msg
-subscriptions model = Navbar.subscriptions model.navState NavMsg
+subscriptions model =
+  Sub.batch [ scrollNavData OnScroll, Navbar.subscriptions model.navState NavMsg ]
 
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
@@ -83,21 +100,23 @@ update msg model =
         Browser.Internal url -> (model, Navigation.pushUrl model.navKey <| Url.toString url)
         -- Do not handle external hrefs in elm, do via html target="_blank"
         Browser.External href -> (model, Cmd.none)
-    
+
+    OnScroll navFixed ->
+      ({ model | isNavFixed = if navFixed then FixNav else FreeNav }, Cmd.none) 
     UrlChange url -> urlUpdate url model
     NavMsg state -> ({ model | navState = state }, Cmd.none)
     CloseContactModal -> ({ model | modalVisibility = Modal.hidden }, Cmd.none)
     ShowContactModal -> ({ model | modalVisibility = Modal.shown }, Cmd.none)
 
 urlUpdate : Url -> Model -> (Model, Cmd Msg)
--- TODO: REIMPLEMENT THIS IF NEEDED!
 urlUpdate url model =
   case decode url of
     Nothing ->
       ( { model | pageSection = IntroJumbo }, Cmd.none )
 
     Just route ->
-      ( { model | pageSection = route }, Cmd.none )
+      let sectionId = getSectionId(Just route) in
+      ( { model | pageSection = route }, Cmd.batch [scrollToTopId sectionId] )
 
 
 decode : Url -> Maybe PageSection
@@ -121,7 +140,11 @@ view : Model -> Browser.Document Msg
 view model =
   { title = "Bill - Software Engineer"
   , body =
-    [ div [ attribute "data-spy" "scroll", attribute "data-target" "#navigation-bar", attribute "data-offset" "0"]
+    [ div
+      [ attribute "data-spy" "scroll"
+      , attribute "data-target" "#navigation-bar"
+      , attribute "data-offset" "0"    
+      ]
       [ navMenu model
       , sectionJumbo model
       , sectionProfile model
@@ -129,36 +152,10 @@ view model =
       , sectionProjects model
       , sectionAbilities model
       , sectionContact model
+      , contactModal model
       ]
     ]
   }
-
-navMenu2 : Model -> Html Msg
-navMenu2 model =
-  nav [ class "navbar navbar-default", id "navigation-bar"]
-    [ div [ class "navbar-header" ]
-      [ button
-        [ class "navbar-toggle"
-        -- , attribute "type" "button"
-        , attribute "data-toggle" "collapse"
-        , attribute "data-target" "#portfolio-menu"
-        ]
-        [ span [ class "sr-only" ] [ text "Toggle navigation" ]
-        , span [ class "icon-bar" ] []
-        , span [ class "icon-bar" ] []
-        , span [ class "icon-bar" ] []
-        ]
-      ]
-    , div [ class "collapse navbar-collapse", id "portfolio-menu" ]
-      [ ul [ class "nav navbar-nav" ]
-        [ li [] [a [ href "#profile" ] [text "Profile"]]
-        , li [] [a [ href "#experience" ] [text "Experience"]]
-        , li [] [a [ href "#projects" ] [text "Projects"]]
-        , li [] [a [ href "#abilities" ] [text "Abilities"]]
-        , li [] [a [ href "#contact" ] [text "Contact"]]
-        ]
-      ]
-    ]
 
 navMenu : Model -> Html Msg
 navMenu model =
@@ -172,25 +169,28 @@ navMenu model =
       , Navbar.itemLink [ href "#abilities" ] [ text "Abilities" ]
       , Navbar.itemLink [ href "#contact" ] [ text "Contact" ]
       ]
-    |> Navbar.attrs [id "navigation-bar" ]
+    |> Navbar.attrs
+      [ id "navigation-bar"
+      , classList [("fixed", model.isNavFixed == FixNav)]
+      ]
     |> Navbar.view model.navState
 
 sectionJumbo : Model -> Html Msg
 sectionJumbo model =
-  div [ class "jumbotron" ]
+  div [ class "jumbotron", id (getSectionId (Just IntroJumbo)) ]
     [ Grid.container []
       [ h1 [] [ text "Hey There, My name is Bill"]
       , p [ class "lead" ] [ text "Click On The Arrow To Learn More About Me!" ]
       ]
     , div [ class "overlay" ] []
-    , a [ href "#profile", class "scroll-down" ]
+    , a [ href "#profile", class "scroll-down", id "scroll-down-button" ]
       [ span [ class "fa fa-chevron-down" ] [] ]
     ]
 
 sectionProfile : Model -> Html Msg
 sectionProfile model =
   div [ class "background-white" ]
-    [ Grid.container [ id "profile" ]
+    [ Grid.container [ id (getSectionId (Just Profile)) ]
       [ similarSectionHeader "Profile" [ text "I am a passionate fullstack developer" ]
       , Grid.row []
         [ Grid.col [Col.md4]
@@ -228,7 +228,7 @@ profileDetails header details =
 
 sectionExperience : Model -> Html Msg
 sectionExperience model =
-  Grid.container [ id "experience" ]
+  Grid.container [ id (getSectionId (Just Experience)) ]
     [ similarSectionHeader "Experience"
       [ text "“The purpose of life is to live it, to taste experience to the utmost, to reach out eagerly and without fear for newer and richer experience.”"
       , br [] []
@@ -301,7 +301,7 @@ experienceSubsectionRow institutionName yearsPresent titleName description =
 sectionProjects : Model -> Html Msg
 sectionProjects model =
   div [ class "background-white" ]
-    [ Grid.container [ id "projects" ]
+    [ Grid.container [ id (getSectionId (Just Projects)) ]
       [ similarSectionHeader "Projects"
         [ text "“Others have seen what is and asked why. I have seen what could be and asked why not.”"
         , br [] []
@@ -345,7 +345,7 @@ projectPreviewLink title previewImgLink previewAltText linkToProject caption tag
 
 sectionAbilities : Model -> Html Msg
 sectionAbilities model =
-  Grid.container [ id "abilities" ]
+  Grid.container [ id (getSectionId (Just Abilities))  ]
     [ similarSectionHeader
       "Abilities"
       [ text """“Wisdom is not a product of schooling but of the lifelong attempt
@@ -438,7 +438,7 @@ sectionAbilities model =
 sectionContact : Model -> Html Msg
 sectionContact model =
   div [ class "background-gray" ]
-    [ Grid.container [ id "contact" ]
+    [ Grid.container [ id (getSectionId (Just Contact))  ]
       [ similarSectionHeader
         "Contact"
         [ text "Want to know more about me?" ]
@@ -454,9 +454,7 @@ sectionContact model =
             , li []
               [ a
                 [ style "cursor" "pointer"
-                -- , attribute "type" "button"
-                , attribute "data-toggle" "modal"
-                , attribute "data-target" "#contactFormModal"
+                , onClick ShowContactModal
                 ]
                 [ i [ class "far fa-envelope-open"] []
                 , span [] [ text "Get in touch!"]
@@ -467,7 +465,7 @@ sectionContact model =
         , Grid.col [ Col.md6 ]
           [ ul [ class "no-bullets" ]
             [ li []
-              [ a [ href "mailto:vic94loh@hotmail.com" ]
+              [ a [ href "mailto:vic94loh@hotmail.com", target "_blank" ]
                 [ i [ class "far fa-envelope"] []
                 , span [] [ text "Or send me an email!"]
                 ]
@@ -479,8 +477,79 @@ sectionContact model =
       ]
     ]
 
--- contactModal : Model -> Html Msg
--- contactModal model =
+contactModal : Model -> Html Msg
+contactModal model =
+  Modal.config CloseContactModal
+  |> Modal.h3 [] [ text "Keep In Touch!" ]
+  |> Modal.body []
+    [ span [] [ text "Interested in working together? Fill out the form below with some info about yourself and I will get back to you as soon as I can!" ]
+    , Html.form [ id "contactForm", method "post", action "https://httpbin.org/post" ]
+      [ div [ class "form-group "]
+        [ label
+          [ for "first-name", class "col-form-label" ]
+          [ text "Name", span [ style "color" "red" ] [ text "*" ] ]
+        , input
+          [ class "form-control"
+          , id "first-name"
+          , name "firstName"
+          , minlength 1
+          , maxlength 255
+          , type_ "text"
+          , required True
+          ] []
+        ]
+      , div [ class "form-group "]
+        [ label
+          [ for "email-address", class "col-form-label" ]
+          [ text "Email Address", span [ style "color" "red" ] [ text "*" ] ]
+        , input
+          [ class "form-control"
+          , id "email-address"
+          , name "emailAddress"
+          , minlength 1
+          , maxlength 255
+          , type_ "email"
+          , required True
+          ] []
+        ]
+      , div [ class "form-group "]
+        [ label
+          [ for "subject", class "col-form-label" ]
+          [ text "Subject", span [ style "color" "red" ] [ text "*" ] ]
+        , input
+          [ class "form-control"
+          , id "subject"
+          , name "subject"
+          , minlength 1
+          , maxlength 255
+          , type_ "text"
+          , required True
+          ] []
+        ]
+      , div [ class "form-group "]
+        [ label
+          [ for "message", class "col-form-label" ]
+          [ text "Message", span [ style "color" "red" ] [ text "*" ] ]
+        , textarea
+          [ class "form-control"
+          , id "message"
+          , name "message"
+          , minlength 1
+          , maxlength 255
+          , required True
+          ] []
+        ]
+      , span [ style "color" "red" ] [ text "*" ]
+      , i [] [ text "Indicates required fields" ] 
+      , div [ class "modal-footer" ]
+        [ Button.button [ Button.secondary, Button.attrs [ onClick CloseContactModal ] ]
+          [ text "Close" ]
+        , input [ class "btn btn-primary", type_ "submit", value "Submit"] []
+        ]
+      ]
+    ]
+  |> Modal.view model.modalVisibility
+
 
 
 
@@ -491,26 +560,3 @@ similarSectionHeader headerTitle headerBody =
     , p [ class "lead" ] headerBody
     , hr [] []
     ]
-
--- <!-- Navigation Bar -->
--- <nav class="navbar navbar-default" id="navigation-bar" role="navigation">
---   <!-- Brand and toggle get grouped for better mobile display -->
---   <div class="navbar-header">
---     <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#portfolio-menu">
---       <span class="sr-only">Toggle navigation</span>
---       <span class="icon-bar"></span>
---       <span class="icon-bar"></span>
---       <span class="icon-bar"></span>
---     </button>
---   </div>
---   <!-- Collect the nav links, forms, and other content for toggling -->
---   <div class="collapse navbar-collapse" id="portfolio-menu">
---     <ul class="nav navbar-nav">
--- 			<li><a href="#profile">Profile</a></li>
--- 			<li><a href="#experience">Experience</a></li>
--- 			<li><a href="#projects">Projects</a></li>
--- 			<li><a href="#abilities">Abilities</a></li>
--- 			<li><a href="#contact">Contact</a></li>
---     </ul>
---   </div>
--- </nav>
